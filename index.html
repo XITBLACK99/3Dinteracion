@@ -5,58 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nebulosa Interactiva IA</title>
     <style>
-        :root { --accent: #00ff88; }
-        body { margin: 0; overflow: hidden; background: radial-gradient(circle at center, #111 0%, #000 100%); font-family: 'Segoe UI', system-ui, sans-serif; }
+        :root { --accent: #ff007a; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
         
-        /* UI Estilo Apple/Glassmorphism */
+        /* UI Glassmorphism */
         #ui-card {
             position: absolute; top: 25px; left: 25px; z-index: 100;
-            background: rgba(20, 20, 20, 0.6);
-            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            padding: 30px; border-radius: 28px; color: white;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            width: 280px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px); padding: 25px; border-radius: 24px;
+            color: white; border: 1px solid rgba(255, 255, 255, 0.1); width: 260px;
         }
 
-        h2 { margin: 0 0 10px 0; font-size: 1.4rem; font-weight: 600; background: linear-gradient(90deg, #fff, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { margin: 0 0 15px 0; font-size: 1.2rem; letter-spacing: 1px; color: var(--accent); text-transform: uppercase; }
         
-        .field { margin-bottom: 20px; }
-        label { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; margin-bottom: 8px; }
-
-        select, input[type="color"] {
+        select, input {
             background: rgba(255,255,255,0.05); color: white; border: 1px solid rgba(255,255,255,0.1);
-            padding: 12px; width: 100%; border-radius: 14px; outline: none; appearance: none; cursor: pointer;
+            padding: 12px; width: 100%; border-radius: 12px; margin-bottom: 15px; outline: none; cursor: pointer;
         }
 
-        .hint { font-size: 0.75rem; line-height: 1.6; color: var(--accent); opacity: 0.9; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); }
+        .instructions { font-size: 0.7rem; opacity: 0.6; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; }
 
+        /* Ocultar Video */
         #video-container { position: fixed; width: 1px; height: 1px; opacity: 0; }
     </style>
 </head>
 <body>
 
     <div id="ui-card">
-        <h2>Experiencia Espacial</h2>
-        
-        <div class="field">
-            <label>Constelación</label>
-            <select id="shapeSelector">
-                <option value="cloud">Nube Cósmica</option>
-                <option value="heart">Corazón de Pulsar</option>
-                <option value="saturn">Anillos de Saturno</option>
-                <option value="fireworks">Supernova</option>
-            </select>
-        </div>
+        <h2>Cyber-Nebula</h2>
+        <label style="font-size:0.7rem; opacity:0.5">ESTRUCTURA</label>
+        <select id="shapeSelector">
+            <option value="saturn">Anillos Celestiales</option>
+            <option value="heart">Núcleo de Energía</option>
+            <option value="fireworks">Explosión Estelar</option>
+            <option value="cloud">Nube de Gas</option>
+        </select>
 
-        <div class="field">
-            <label>Tonalidad de Energía</label>
-            <input type="color" id="colorPicker" value="#00ff88">
-        </div>
+        <label style="font-size:0.7rem; opacity:0.5">COLOR DE PLASMA</label>
+        <input type="color" id="colorPicker" value="#ff007a">
 
-        <div class="hint">
-            <b>Interacción:</b><br>
-            • Mueve la palma para rotar el eje.<br>
-            • Pellizca (pulgar + índice) para expandir.
+        <div class="instructions">
+            Mueve la mano para rotar el cosmos.<br>
+            Pellizca para expandir la materia.
         </div>
     </div>
 
@@ -67,75 +57,69 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <script>
-        // --- ESCENA ---
+        // --- CONFIGURACIÓN ESCENA ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
-        camera.position.z = 6;
+        camera.position.z = 5;
 
-        // --- TEXTURA DE PARTÍCULA (Círculo suave) ---
-        const createTicketTexture = () => {
+        // --- TEXTURA DE LUZ (Destello suave) ---
+        const createFlare = () => {
             const canvas = document.createElement('canvas');
             canvas.width = 64; canvas.height = 64;
             const ctx = canvas.getContext('2d');
             const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
             grad.addColorStop(0, 'rgba(255,255,255,1)');
-            grad.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+            grad.addColorStop(0.2, 'rgba(255,255,255,0.3)');
             grad.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, 64, 64);
-            const tex = new THREE.CanvasTexture(canvas);
-            return tex;
+            ctx.fillStyle = grad; ctx.fillRect(0,0,64,64);
+            return new THREE.CanvasTexture(canvas);
         };
 
-        // --- GENERADOR DE FORMAS ---
-        const count = 8000;
+        // --- LÓGICA DE PARTÍCULAS ---
+        const count = 10000;
         const geo = new THREE.BufferGeometry();
         
-        function getPoints(type) {
+        function generateShape(type) {
             const p = new Float32Array(count * 3);
             for(let i=0; i<count; i++) {
                 let i3 = i*3;
-                if(type === 'heart') {
+                if(type === 'saturn') {
+                    const isRing = Math.random() > 0.3;
+                    const r = isRing ? 2.5 + Math.random() * 1.2 : Math.random() * 1.5;
+                    const a = Math.random() * Math.PI * 2;
+                    p[i3] = Math.cos(a) * r;
+                    p[i3+1] = isRing ? (Math.random()-0.5)*0.1 : (Math.random()-0.5)*2;
+                    p[i3+2] = Math.sin(a) * r;
+                } else if(type === 'heart') {
                     const t = Math.random() * Math.PI * 2;
                     p[i3] = 1.6 * Math.pow(Math.sin(t), 3);
                     p[i3+1] = 1.3 * Math.cos(t) - 0.5 * Math.cos(2*t) - 0.2 * Math.cos(3*t) - 0.1 * Math.cos(4*t);
-                } else if(type === 'saturn') {
-                    const isRing = Math.random() > 0.4;
-                    const r = isRing ? 2.5 + Math.random() * 1.5 : 1.5;
-                    const a = Math.random() * Math.PI * 2;
-                    p[i3] = Math.cos(a) * r;
-                    p[i3+1] = isRing ? (Math.random()-0.5)*0.1 : (Math.random()-0.5)*2.5;
-                    p[i3+2] = Math.sin(a) * r;
+                    p[i3+2] = (Math.random()-0.5) * 0.5;
                 } else if(type === 'fireworks') {
-                    const r = Math.pow(Math.random(), 2) * 4;
+                    const r = Math.pow(Math.random(), 0.5) * 3;
                     const a = Math.random() * 6.28; const b = Math.random() * 3.14;
                     p[i3] = r * Math.sin(b) * Math.cos(a); p[i3+1] = r * Math.sin(b) * Math.sin(a); p[i3+2] = r * Math.cos(b);
                 } else {
-                    p[i3] = (Math.random()-0.5)*10; p[i3+1] = (Math.random()-0.5)*10; p[i3+2] = (Math.random()-0.5)*5;
+                    p[i3] = (Math.random()-0.5)*8; p[i3+1] = (Math.random()-0.5)*8; p[i3+2] = (Math.random()-0.5)*8;
                 }
             }
             return p;
         }
 
-        geo.setAttribute('position', new THREE.BufferAttribute(getPoints('cloud'), 3));
+        geo.setAttribute('position', new THREE.BufferAttribute(generateShape('saturn'), 3));
         const mat = new THREE.PointsMaterial({
-            size: 0.08,
-            map: createTicketTexture(),
-            color: 0x00ff88,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            opacity: 0.6
+            size: 0.05, map: createFlare(), transparent: true,
+            blending: THREE.AdditiveBlending, color: 0xff007a, depthWrite: false
         });
 
         const points = new THREE.Points(geo, mat);
         scene.add(points);
 
-        // --- IA DE MANOS ---
+        // --- INTELIGENCIA ARTIFICIAL (MANOS) ---
         const video = document.getElementById('input_video');
         const hands = new Hands({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
         hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
@@ -143,12 +127,12 @@
         hands.onResults(res => {
             if (res.multiHandLandmarks && res.multiHandLandmarks[0]) {
                 const lm = res.multiHandLandmarks[0];
-                // Suavizado de movimiento (Lerp manual)
-                points.rotation.y += ((lm[9].x - 0.5) * 5 - points.rotation.y) * 0.1;
-                points.rotation.x += ((lm[9].y - 0.5) * 5 - points.rotation.x) * 0.1;
-                
+                // Rotación suave con inercia
+                points.rotation.y += ((lm[9].x - 0.5) * 4 - points.rotation.y) * 0.1;
+                points.rotation.x += ((lm[9].y - 0.5) * 4 - points.rotation.x) * 0.1;
+                // Escala por pellizco
                 const d = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-                const s = Math.max(0.4, d * 12);
+                const s = Math.max(0.4, d * 10);
                 points.scale.lerp(new THREE.Vector3(s, s, s), 0.1);
             }
         });
@@ -159,9 +143,9 @@
         });
         cam.start();
 
-        // --- INTERFAZ ---
+        // --- UI E INTERACCIÓN ---
         document.getElementById('shapeSelector').onchange = (e) => {
-            points.geometry.setAttribute('position', new THREE.BufferAttribute(getPoints(e.target.value), 3));
+            points.geometry.setAttribute('position', new THREE.BufferAttribute(generateShape(e.target.value), 3));
         };
         document.getElementById('colorPicker').oninput = (e) => {
             mat.color.set(e.target.value);
@@ -170,7 +154,7 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            points.rotation.z += 0.001;
+            points.rotation.z += 0.001; // Giro sutil automático
             renderer.render(scene, camera);
         }
         animate();
