@@ -2,6 +2,400 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Particulem IA - Magic Edition</title>
+    <style>
+        :root { --púrpura: #ff00ff; --cian: #00ffff; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Inter', system-ui, sans-serif; }
+        
+        /* Interfaz "Particulem" idéntica a la imagen */
+        #ui-card {
+            position: absolute; top: 30px; left: 30px; z-index: 100;
+            background: rgba(20, 20, 25, 0.7); backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px); padding: 25px; border-radius: 22px;
+            color: white; border: 1px solid rgba(255, 255, 255, 0.15); width: 240px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        }
+
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        h2 { margin: 0; font-size: 1.1rem; font-weight: 500; opacity: 0.9; }
+        
+        .selector-icons { display: flex; gap: 15px; margin-bottom: 25px; }
+        .icon-btn { 
+            width: 45px; height: 45px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.2);
+            display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s;
+            background: rgba(255,255,255,0.05); font-size: 1.2rem;
+        }
+        .icon-btn.active { border-color: var(--púrpura); box-shadow: 0 0 15px var(--púrpura); background: rgba(255,0,255,0.1); }
+
+        .color-dots { display: flex; gap: 10px; margin-top: 10px; }
+        .dot { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+        .dot.active { border-color: white; transform: scale(1.2); }
+
+        #video-container { position: fixed; width: 1px; height: 1px; opacity: 0; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-card">
+        <div class="header">
+            <h2>Particulem</h2>
+            <span style="opacity:0.4; cursor:pointer">✕</span>
+        </div>
+        
+        <p style="font-size:0.7rem; opacity:0.5; margin-bottom:10px">Estructura</p>
+        <div class="selector-icons">
+            <div class="icon-btn active" onclick="changeShape('saturn', this)">🪐</div>
+            <div class="icon-btn" onclick="changeShape('heart', this)">♥</div>
+            <div class="icon-btn" onclick="changeShape('cloud', this)">☁</div>
+        </div>
+
+        <p style="font-size:0.7rem; opacity:0.5; margin-bottom:10px">Color</p>
+        <div class="color-dots">
+            <div class="dot" style="background:#ff00ff" onclick="updateColor('#ff00ff', this)"></div>
+            <div class="dot" style="background:#00ffff" onclick="updateColor('#00ffff', this)"></div>
+            <div class="dot" style="background:#ff3366" onclick="updateColor('#ff3366', this)"></div>
+            <div class="dot" style="background:#ffffff" onclick="updateColor('#ffffff', this)"></div>
+        </div>
+    </div>
+
+    <div id="video-container"><video id="input_video" playsinline muted></video></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    <script>
+        // --- MOTOR 3D ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+        camera.position.z = 6;
+
+        // --- TEXTURA DE LUZ RADIAL ---
+        const createParticleTex = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(0.2, 'rgba(255,255,255,0.5)');
+            grad.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,128,128);
+            return new THREE.CanvasTexture(canvas);
+        };
+
+        // --- GENERADOR DE GEOMETRÍA (ESTILO IMAGEN) ---
+        const count = 12000;
+        const geometry = new THREE.BufferGeometry();
+        
+        function generatePositions(type) {
+            const positions = new Float32Array(count * 3);
+            for(let i=0; i<count; i++) {
+                const i3 = i * 3;
+                if(type === 'saturn') {
+                    const isRing = Math.random() > 0.35;
+                    const r = isRing ? 2.8 + Math.random() * 0.8 : Math.random() * 1.6;
+                    const angle = Math.random() * Math.PI * 2;
+                    positions[i3] = Math.cos(angle) * r;
+                    positions[i3+1] = isRing ? (Math.random()-0.5)*0.05 : (Math.random()-0.5)*1.8;
+                    positions[i3+2] = Math.sin(angle) * r;
+                } else if(type === 'heart') {
+                    const t = Math.random() * Math.PI * 2;
+                    positions[i3] = 1.6 * Math.pow(Math.sin(t), 3);
+                    positions[i3+1] = 1.3 * Math.cos(t) - 0.5 * Math.cos(2*t) - 0.2 * Math.cos(3*t) - 0.1 * Math.cos(4*t);
+                } else {
+                    positions[i3] = (Math.random()-0.5)*8; positions[i3+1] = (Math.random()-0.5)*8; positions[i3+2] = (Math.random()-0.5)*8;
+                }
+            }
+            return positions;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(generatePositions('saturn'), 3));
+        const material = new THREE.PointsMaterial({
+            size: 0.04, map: createParticleTex(), transparent: true,
+            blending: THREE.AdditiveBlending, color: 0x00ffff, depthWrite: false, opacity: 0.8
+        });
+
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+
+        // --- MANOS IA ---
+        const video = document.getElementById('input_video');
+        const hands = new Hands({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
+        
+        hands.onResults(res => {
+            if (res.multiHandLandmarks && res.multiHandLandmarks[0]) {
+                const lm = res.multiHandLandmarks[0];
+                // El punto 9 es el centro de la mano (palma)
+                points.rotation.y += ((lm[9].x - 0.5) * 6 - points.rotation.y) * 0.12;
+                points.rotation.x += ((lm[9].y - 0.5) * 6 - points.rotation.x) * 0.12;
+                
+                // Pellizco para escalar materia
+                const dist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                const s = Math.max(0.4, dist * 12);
+                points.scale.lerp(new THREE.Vector3(s, s, s), 0.1);
+            }
+        });
+
+        const cam = new Camera(video, {
+            onFrame: async () => { await hands.send({image: video}); },
+            width: 640, height: 480
+        });
+        cam.start();
+
+        // --- FUNCIONES UI ---
+        window.changeShape = (type, el) => {
+            document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            points.geometry.setAttribute('position', new THREE.BufferAttribute(generatePositions(type), 3));
+        };
+
+        window.updateColor = (color, el) => {
+            document.querySelectorAll('.dot').forEach(d => d.classList.remove('active'));
+            el.classList.add('active');
+            material.color.set(color);
+        };
+
+        function animate() {
+            requestAnimationFrame(animate);
+            points.rotation.z += 0.0015;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.onresize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+    </script>
+</body>
+</html>
+            grad.addColorStop(0.2, 'rgba(255,255,255,0.5)');
+            grad.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,128,128);
+            return new THREE.CanvasTexture(canvas);
+        };
+
+        // --- GENERADOR DE GEOMETRÍA (ESTILO IMAGEN) ---
+        const count = 12000;
+        const geometry = new THREE.BufferGeometry();
+        
+        function generatePositions(type) {
+            const positions = new Float32Array(count * 3);
+            for(let i=0; i<count; i++) {
+                const i3 = i * 3;
+                if(type === 'saturn') {
+                    const isRing = Math.random() > 0.35;
+                    const r = isRing ? 2.8 + Math.random() * 0.8 : Math.random() * 1.6;
+                    const angle = Math.random() * Math.PI * 2;
+                    positions[i3] = Math.cos(angle) * r;
+                    positions[i3+1] = isRing ? (Math.random()-0.5)*0.05 : (Math.random()-0.5)*1.8;
+                    positions[i3+2] = Math.sin(angle) * r;
+                } else if(type === 'heart') {
+                    const t = Math.random() * Math.PI * 2;
+                    positions[i3] = 1.6 * Math.pow(Math.sin(t), 3);
+                    positions[i3+1] = 1.3 * Math.cos(t) - 0.5 * Math.cos(2*t) - 0.2 * Math.cos(3*t) - 0.1 * Math.cos(4*t);
+                } else {
+                    positions[i3] = (Math.random()-0.5)*8; positions[i3+1] = (Math.random()-0.5)*8; positions[i3+2] = (Math.random()-0.5)*8;
+                }
+            }
+            return positions;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(generatePositions('saturn'), 3));
+        const material = new THREE.PointsMaterial({
+            size: 0.04, map: createParticleTex(), transparent: true,
+            blending: THREE.AdditiveBlending, color: 0x00ffff, depthWrite: false, opacity: 0.8
+        });
+
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+
+        // --- MANOS IA ---
+        const video = document.getElementById('input_video');
+        const hands = new Hands({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
+        
+        hands.onResults(res => {
+            if (res.multiHandLandmarks && res.multiHandLandmarks[0]) {
+                const lm = res.multiHandLandmarks[0];
+                // El punto 9 es el centro de la mano (palma)
+                points.rotation.y += ((lm[9].x - 0.5) * 6 - points.rotation.y) * 0.12;
+                points.rotation.x += ((lm[9].y - 0.5) * 6 - points.rotation.x) * 0.12;
+                
+                // Pellizco para escalar materia
+                const dist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                const s = Math.max(0.4, dist * 12);
+                points.scale.lerp(new THREE.Vector3(s, s, s), 0.1);
+            }
+        });
+
+        const cam = new Camera(video, {
+            onFrame: async () => { await hands.send({image: video}); },
+            width: 640, height: 480
+        });
+        cam.start();
+
+        // --- FUNCIONES UI ---
+        window.changeShape = (type, el) => {
+            document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add(de miactive');
+            points.geometry.setAttribute('position', new THREE.BufferAttribute(generatePositions(type), 3));
+        };
+
+        window.updateColor = (color, el) => {
+            document.querySelectorAll('.dot').forEach(d => d.classList.remove('active'));
+            el.classList.add('active');
+            material.color.set(color);
+        };
+
+        function animate() {
+            requestAnimationFrame(animate);
+            points.rotation.z += 0.0015;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.onresize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+    </script>
+</body>
+</html>
+    </div>
+
+    <div id="video-container"><video id="input_video" playsinline muted></video></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+    <script>
+        // --- MOTOR 3D ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+        camera.position.z = 6;
+
+        // --- TEXTURA DE LUZ RADIAL ---
+        const createParticleTex = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(0.2, 'rgba(255,255,255,0.5)');
+            grad.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad; ctx.fillRect(0,0,128,128);
+            return new THREE.CanvasTexture(canvas);
+        };
+
+        // --- GENERADOR DE GEOMETRÍA (ESTILO IMAGEN) ---
+        const count = 12000;
+        const geometry = new THREE.BufferGeometry();
+        
+        function generatePositions(type) {
+            const positions = new Float32Array(count * 3);
+            for(let i=0; i<count; i++) {
+                const i3 = i * 3;
+                if(type === 'saturn') {
+                    const isRing = Math.random() > 0.35;
+                    const r = isRing ? 2.8 + Math.random() * 0.8 : Math.random() * 1.6;
+                    const angle = Math.random() * Math.PI * 2;
+                    positions[i3] = Math.cos(angle) * r;
+                    positions[i3+1] = isRing ? (Math.random()-0.5)*0.05 : (Math.random()-0.5)*1.8;
+                    positions[i3+2] = Math.sin(angle) * r;
+                } else if(type === 'heart') {
+                    const t = Math.random() * Math.PI * 2;
+                    positions[i3] = 1.6 * Math.pow(Math.sin(t), 3);
+                    positions[i3+1] = 1.3 * Math.cos(t) - 0.5 * Math.cos(2*t) - 0.2 * Math.cos(3*t) - 0.1 * Math.cos(4*t);
+                } else {
+                    positions[i3] = (Math.random()-0.5)*8; positions[i3+1] = (Math.random()-0.5)*8; positions[i3+2] = (Math.random()-0.5)*8;
+                }
+            }
+            return positions;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(generatePositions('saturn'), 3));
+        const material = new THREE.PointsMaterial({
+            size: 0.04, map: createParticleTex(), transparent: true,
+            blending: THREE.AdditiveBlending, color: 0x00ffff, depthWrite: false, opacity: 0.8
+        });
+
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+
+        // --- MANOS IA ---
+        const video = document.getElementById('input_video');
+        const hands = new Hands({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
+        
+        hands.onResults(res => {
+            if (res.multiHandLandmarks && res.multiHandLandmarks[0]) {
+                const lm = res.multiHandLandmarks[0];
+                // El punto 9 es el centro de la mano (palma)
+                points.rotation.y += ((lm[9].x - 0.5) * 6 - points.rotation.y) * 0.12;
+                points.rotation.x += ((lm[9].y - 0.5) * 6 - points.rotation.x) * 0.12;
+                
+                // Pellizco para escalar materia
+                const dist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                const s = Math.max(0.4, dist * 12);
+                points.scale.lerp(new THREE.Vector3(s, s, s), 0.1);
+            }
+        });
+
+        const cam = new Camera(video, {
+            onFrame: async () => { await hands.send({image: video}); },
+            width: 640, height: 480
+        });
+        cam.start();
+
+        // --- FUNCIONES UI ---
+        window.changeShape = (type, el) => {
+            document.querySelectorAll('.icon-btn').forEach(b => b.classList.remove('active'));
+            el.classList.add('active');
+            points.geometry.setAttribute('position', new THREE.BufferAttribute(generatePositions(type), 3));
+        };
+
+        window.updateColor = (color, el) => {
+            document.querySelectorAll('.dot').forEach(d => d.classList.remove('active'));
+            el.classList.add('active');
+            material.color.set(color);
+        };
+
+        function animate() {
+            requestAnimationFrame(animate);
+            points.rotation.z += 0.0015;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.onresize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        };
+    </script>
+</body>
+</html>
+
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Partículas IA</title>
     <style>
