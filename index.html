@@ -2,168 +2,142 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nebulosa Interactiva IA</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Partículas IA</title>
     <style>
-        :root { --accent: #ff007a; }
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        canvas { display: block; position: fixed; top: 0; left: 0; z-index: 1; }
         
-        /* UI Glassmorphism */
-        #ui-card {
-            position: absolute; top: 25px; left: 25px; z-index: 100;
-            background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px); padding: 25px; border-radius: 24px;
-            color: white; border: 1px solid rgba(255, 255, 255, 0.1); width: 260px;
+        #ui-container {
+            position: absolute; top: 15px; left: 15px; z-index: 10;
+            background: rgba(10, 10, 10, 0.8); backdrop-filter: blur(10px);
+            padding: 20px; border-radius: 20px; color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1); width: 240px;
         }
 
-        h2 { margin: 0 0 15px 0; font-size: 1.2rem; letter-spacing: 1px; color: var(--accent); text-transform: uppercase; }
-        
-        select, input {
-            background: rgba(255,255,255,0.05); color: white; border: 1px solid rgba(255,255,255,0.1);
-            padding: 12px; width: 100%; border-radius: 12px; margin-bottom: 15px; outline: none; cursor: pointer;
+        select, input, button {
+            background: rgba(255, 255, 255, 0.1); color: white; border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px; width: 100%; border-radius: 10px; margin-top: 10px; outline: none;
         }
 
-        .instructions { font-size: 0.7rem; opacity: 0.6; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; }
+        button { background: #00ff88; color: black; font-weight: bold; cursor: pointer; border: none; }
 
-        /* Ocultar Video */
-        #video-container { position: fixed; width: 1px; height: 1px; opacity: 0; }
+        #video-container { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     </style>
 </head>
 <body>
 
-    <div id="ui-card">
-        <h2>Cyber-Nebula</h2>
-        <label style="font-size:0.7rem; opacity:0.5">ESTRUCTURA</label>
+    <div id="ui-container">
+        <h2 style="margin:0; color:#00ff88; font-size: 1.2rem;">Partículas IA</h2>
         <select id="shapeSelector">
-            <option value="saturn">Anillos Celestiales</option>
-            <option value="heart">Núcleo de Energía</option>
-            <option value="fireworks">Explosión Estelar</option>
-            <option value="cloud">Nube de Gas</option>
+            <option value="cloud">Nube de Estrellas</option>
+            <option value="heart">Corazón 3D </option>
+            <option value="saturn">Anillo</option>
+            <option value="fireworks">Bomba</option>
         </select>
-
-        <label style="font-size:0.7rem; opacity:0.5">COLOR DE PLASMA</label>
-        <input type="color" id="colorPicker" value="#ff007a">
-
-        <div class="instructions">
-            Mueve la mano para rotar el cosmos.<br>
-            Pellizca para expandir la materia.
-        </div>
+        <input type="color" id="colorPicker" value="#00ff88">
+        <button id="btnRetry">REINTENTAR CÁMARA</button>
+        <p style="font-size: 0.7rem; opacity: 0.6; margin-top: 10px;">
+            ⚠️ Si falla: Copia el link y pégalo directamente en CHROME.
+        </p>
     </div>
 
-    <div id="video-container"><video id="input_video" playsinline muted></video></div>
+    <div id="video-container">
+        <video id="input_video" playsinline muted></video>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <script>
-        // --- CONFIGURACIÓN ESCENA ---
+        // --- MOTOR 3D ---
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
         camera.position.z = 5;
 
-        // --- TEXTURA DE LUZ (Destello suave) ---
-        const createFlare = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64; canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-            grad.addColorStop(0, 'rgba(255,255,255,1)');
-            grad.addColorStop(0.2, 'rgba(255,255,255,0.3)');
-            grad.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = grad; ctx.fillRect(0,0,64,64);
-            return new THREE.CanvasTexture(canvas);
-        };
-
-        // --- LÓGICA DE PARTÍCULAS ---
-        const count = 10000;
-        const geo = new THREE.BufferGeometry();
-        
-        function generateShape(type) {
-            const p = new Float32Array(count * 3);
+        function createPoints(type) {
+            const count = 4000;
+            const pos = new Float32Array(count * 3);
             for(let i=0; i<count; i++) {
                 let i3 = i*3;
-                if(type === 'saturn') {
-                    const isRing = Math.random() > 0.3;
-                    const r = isRing ? 2.5 + Math.random() * 1.2 : Math.random() * 1.5;
-                    const a = Math.random() * Math.PI * 2;
-                    p[i3] = Math.cos(a) * r;
-                    p[i3+1] = isRing ? (Math.random()-0.5)*0.1 : (Math.random()-0.5)*2;
-                    p[i3+2] = Math.sin(a) * r;
-                } else if(type === 'heart') {
+                if(type === 'heart') {
                     const t = Math.random() * Math.PI * 2;
-                    p[i3] = 1.6 * Math.pow(Math.sin(t), 3);
-                    p[i3+1] = 1.3 * Math.cos(t) - 0.5 * Math.cos(2*t) - 0.2 * Math.cos(3*t) - 0.1 * Math.cos(4*t);
-                    p[i3+2] = (Math.random()-0.5) * 0.5;
+                    pos[i3] = 1.6 * Math.pow(Math.sin(t), 3);
+                    pos[i3+1] = 1.3 * Math.cos(t) - 0.5 * Math.cos(2*t) - 0.2 * Math.cos(3*t) - 0.1 * Math.cos(4*t);
+                } else if(type === 'saturn') {
+                    const r = Math.random() > 0.4 ? 1.5 : 3;
+                    const a = Math.random() * Math.PI * 2;
+                    pos[i3] = Math.cos(a) * r; pos[i3+1] = Math.sin(a) * (r > 2 ? 0.1 : 1.5); pos[i3+2] = Math.sin(a) * r;
                 } else if(type === 'fireworks') {
-                    const r = Math.pow(Math.random(), 0.5) * 3;
-                    const a = Math.random() * 6.28; const b = Math.random() * 3.14;
-                    p[i3] = r * Math.sin(b) * Math.cos(a); p[i3+1] = r * Math.sin(b) * Math.sin(a); p[i3+2] = r * Math.cos(b);
+                    const r = Math.random() * 3; const a = Math.random() * 6.28; const b = Math.random() * 6.28;
+                    pos[i3] = r * Math.sin(a) * Math.cos(b); pos[i3+1] = r * Math.sin(a) * Math.sin(b); pos[i3+2] = r * Math.cos(a);
                 } else {
-                    p[i3] = (Math.random()-0.5)*8; p[i3+1] = (Math.random()-0.5)*8; p[i3+2] = (Math.random()-0.5)*8;
+                    pos[i3] = (Math.random()-0.5)*8; pos[i3+1] = (Math.random()-0.5)*8; pos[i3+2] = (Math.random()-0.5)*8;
                 }
             }
-            return p;
+            return pos;
         }
 
-        geo.setAttribute('position', new THREE.BufferAttribute(generateShape('saturn'), 3));
-        const mat = new THREE.PointsMaterial({
-            size: 0.05, map: createFlare(), transparent: true,
-            blending: THREE.AdditiveBlending, color: 0xff007a, depthWrite: false
-        });
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(createPoints('cloud'), 3));
+        const mat = new THREE.PointsMaterial({ size: 0.06, color: 0x00ff88, transparent: true, blending: THREE.AdditiveBlending });
+        const particles = new THREE.Points(geo, mat);
+        scene.add(particles);
 
-        const points = new THREE.Points(geo, mat);
-        scene.add(points);
-
-        // --- INTELIGENCIA ARTIFICIAL (MANOS) ---
-        const video = document.getElementById('input_video');
-        const hands = new Hands({locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
+        // --- MANOS IA ---
+        const videoElement = document.getElementById('input_video');
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
         
-        hands.onResults(res => {
-            if (res.multiHandLandmarks && res.multiHandLandmarks[0]) {
-                const lm = res.multiHandLandmarks[0];
-                // Rotación suave con inercia
-                points.rotation.y += ((lm[9].x - 0.5) * 4 - points.rotation.y) * 0.1;
-                points.rotation.x += ((lm[9].y - 0.5) * 4 - points.rotation.x) * 0.1;
-                // Escala por pellizco
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5 });
+        hands.onResults(results => {
+            if (results.multiHandLandmarks && results.multiHandLandmarks[0]) {
+                const lm = results.multiHandLandmarks[0];
+                particles.rotation.y = (lm[9].x - 0.5) * 4;
+                particles.rotation.x = (lm[9].y - 0.5) * 4;
                 const d = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
-                const s = Math.max(0.4, d * 10);
-                points.scale.lerp(new THREE.Vector3(s, s, s), 0.1);
+                const s = Math.max(0.3, d * 10);
+                particles.scale.set(s, s, s);
             }
         });
 
-        const cam = new Camera(video, {
-            onFrame: async () => { await hands.send({image: video}); },
-            width: 640, height: 480
+        const cam = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 740, height: 580
         });
-        cam.start();
 
-        // --- UI E INTERACCIÓN ---
+        function startCamera() {
+            cam.start().catch(err => {
+                alert("ERROR: Abre este link en CHROME directamente, no desde otra app.");
+            });
+        }
+
+        startCamera();
+        document.getElementById('btnRetry').onclick = startCamera;
+
+        // UI Events
         document.getElementById('shapeSelector').onchange = (e) => {
-            points.geometry.setAttribute('position', new THREE.BufferAttribute(generateShape(e.target.value), 3));
+            particles.geometry.setAttribute('position', new THREE.BufferAttribute(createPoints(e.target.value), 3));
         };
         document.getElementById('colorPicker').oninput = (e) => {
-            mat.color.set(e.target.value);
-            document.documentElement.style.setProperty('--accent', e.target.value);
+            particles.material.color.set(e.target.value);
         };
 
         function animate() {
             requestAnimationFrame(animate);
-            points.rotation.z += 0.001; // Giro sutil automático
+            particles.rotation.z += 0.001;
             renderer.render(scene, camera);
         }
         animate();
 
-        window.onresize = () => {
+        window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        };
+        });
     </script>
 </body>
 </html>
